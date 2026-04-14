@@ -1,25 +1,42 @@
 const MAX_MESSAGE_LENGTH = 1000;
 const MAX_CONTEXT_LENGTH = 500;
+const MAX_STYLE_LENGTH = 200;
 const OPENAI_TIMEOUT_MS = 15_000;
 
-const SYSTEM_PROMPT = `You are a texting assistant. You help people reply to text messages they've received.
+const SYSTEM_PROMPT = `You generate text message replies. You are not an assistant — you write as if you ARE the person texting.
 
-Given a message (and optional context), produce exactly 3 short reply suggestions.
+Given an incoming message (and optional context and user style), produce exactly 3 reply options.
 
-Voice and tone:
-- Sound like a real person texting — casual, natural, not performative
-- Vary the three replies: one laid-back/casual, one warm/friendly, one concise/direct
-- Match the energy of the incoming message — if it's chill, stay chill; if it's excited, match that
-- Never sound like a chatbot, customer service rep, or AI assistant
-- Do not use emojis unless the incoming message contains emojis
-- Keep each reply under 25 words
-- No filler phrases like "Sure thing!" or "Absolutely!" or "No worries!"
-- Do not repeat or closely rephrase the original message
+How to write:
+- Write like a real person texts. Fragments, lowercase, short thoughts. Not full polished sentences.
+- Match the length and energy of the incoming message. Short message = short replies. Long message = you can go longer.
+- If the incoming message is ultra-low-information ("ok", "lol", "haha", "sure", "hey", "nm"), keep all replies very short (1-6 words). Do not force cleverness or length. Match the low effort naturally.
+- If the message has specific content (a question, a topic, a plan), at least one reply should engage with that specific content — not just react generically.
+- Usually use lowercase unless the incoming message clearly uses capitalization.
+- Do not use emojis unless the incoming message contains emojis.
+- Do not repeat or closely rephrase the original message back.
+
+What to avoid:
+- Generic filler: "sounds good", "no worries", "absolutely", "what about you?", "glad to hear that", "that's awesome", "for sure"
+- Robotic or assistant-like phrasing
+- Overly eager or performative tone
+- Making every reply a question
+- Starting all 3 replies the same way
+
+User style:
+- If a user style description is provided, adapt your writing voice to match it. A confident person texts differently than a shy one. A flirty person texts differently than a professional one.
+- If no user style is given, default to a neutral casual voice.
+- Do not make all users sound the same.
+
+The 3 replies must be meaningfully different:
+1. Safest / most natural — what most people would send
+2. Warmer / more engaging — builds connection or moves the conversation forward
+3. Bolder / funnier / more distinctive — has more personality or edge
 
 Output format:
 - Respond with ONLY a JSON array of exactly 3 strings
 - No markdown, no code fences, no labels, no explanation
-- Example: ["reply one","reply two","reply three"]`;
+- Example: ["yeah for sure","wait that's actually hilarious","i'm in, when?"]`;
 
 function parseBody(req) {
   if (!req.body) return {};
@@ -34,7 +51,7 @@ function parseBody(req) {
 }
 
 function validateInput(body) {
-  const { message, context } = body;
+  const { message, context, userStyle } = body;
 
   if (!message || typeof message !== "string") {
     return { error: "Missing or invalid 'message' field", status: 400 };
@@ -53,7 +70,12 @@ function validateInput(body) {
     return { error: `'context' exceeds ${MAX_CONTEXT_LENGTH} character limit`, status: 400 };
   }
 
-  return { message: trimmedMessage, context: trimmedContext };
+  const trimmedStyle = userStyle != null ? String(userStyle).trim() : "";
+  if (trimmedStyle.length > MAX_STYLE_LENGTH) {
+    return { error: `'userStyle' exceeds ${MAX_STYLE_LENGTH} character limit`, status: 400 };
+  }
+
+  return { message: trimmedMessage, context: trimmedContext, userStyle: trimmedStyle };
 }
 
 function extractJsonArray(raw) {
@@ -104,7 +126,7 @@ async function callOpenAI(apiKey, userContent) {
       signal: controller.signal,
       body: JSON.stringify({
         model: "gpt-4o-mini",
-        temperature: 0.8,
+        temperature: 0.7,
         max_tokens: 200,
         messages: [
           { role: "system", content: SYSTEM_PROMPT },
@@ -158,9 +180,11 @@ export default async function handler(req, res) {
     return res.status(500).json({ error: "Server misconfiguration" });
   }
 
-  const userContent = input.context
-    ? `Context: ${input.context}\n\nMessage received: ${input.message}`
-    : `Message received: ${input.message}`;
+  const parts = [];
+  if (input.userStyle) parts.push(`User style: ${input.userStyle}`);
+  if (input.context) parts.push(`Context: ${input.context}`);
+  parts.push(`Message received: ${input.message}`);
+  const userContent = parts.join("\n\n");
 
   try {
     const result = await callOpenAI(apiKey, userContent);

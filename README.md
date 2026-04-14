@@ -10,15 +10,17 @@ Minimal Vercel serverless API that suggests 3 natural text message replies using
 
 ```json
 {
-  "message": "Hey, are you free this weekend?",
-  "context": "From a close friend"
+  "message": "you're trouble 😂",
+  "context": "dating app, playful vibe",
+  "userStyle": "male, confident, casual, slightly flirty"
 }
 ```
 
-| Field     | Type   | Required | Max Length | Description                        |
-|-----------|--------|----------|------------|------------------------------------|
-| `message` | string | yes      | 1000 chars | The text message you received      |
-| `context` | string | no       | 500 chars  | Optional context about the conversation |
+| Field       | Type   | Required | Max Length | Description                              |
+|-------------|--------|----------|------------|------------------------------------------|
+| `message`   | string | yes      | 1000 chars | The text message you received            |
+| `context`   | string | no       | 500 chars  | Optional context about the conversation  |
+| `userStyle` | string | no       | 200 chars  | Optional description of your texting style |
 
 ### Success Response (200)
 
@@ -84,6 +86,16 @@ curl -X POST https://YOUR_PROJECT.vercel.app/api/generate \
   -H "Content-Type: application/json" \
   -d '{"message": "Can you cover my shift tomorrow?", "context": "From a coworker I get along with"}'
 
+# With userStyle
+curl -X POST https://YOUR_PROJECT.vercel.app/api/generate \
+  -H "Content-Type: application/json" \
+  -d '{"message": "you'\''re trouble 😂", "context": "dating app, playful vibe", "userStyle": "male, confident, casual, slightly flirty"}'
+
+# Ultra-low-information input
+curl -X POST https://YOUR_PROJECT.vercel.app/api/generate \
+  -H "Content-Type: application/json" \
+  -d '{"message": "lol"}'
+
 # Should return 400
 curl -X POST https://YOUR_PROJECT.vercel.app/api/generate \
   -H "Content-Type: application/json" \
@@ -97,12 +109,11 @@ curl https://YOUR_PROJECT.vercel.app/api/generate
 
 - No rate limiting — anyone with the URL can call it freely
 - CORS allows all origins (`*`)
-- No retry if the model returns malformed output
 - Single region (Vercel default)
 
 ## Next Improvements
 
 1. Rate limiting with Upstash Redis or Vercel KV
 2. Lock CORS to your frontend domain
-3. Retry once on malformed model output before returning 502
-4. Add a simple frontend or iOS Shortcut to call the API
+3. Add a simple frontend or iOS Shortcut to call the API
+4. Store and reuse userStyle per user via KV or cookie
